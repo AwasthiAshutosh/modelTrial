@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  ml-service:
+    build: ./ml-service
+    platform: linux/amd64
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      - ML_SERVICE_URL=http://ml-service:8000
+    depends_on:
+      ml-service:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

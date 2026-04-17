@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+ultralytics
+diffusers
+transformers
+accelerate
+torch
+torchvision
+opencv-python
+numpy
+pydantic
+python-multipart
+pillow
+python-dotenv
+xformers
