@@ -81,7 +81,7 @@ async def get_status(task_id: str):
             
             return {
                 "status": "completed",
-                "result_url": f"/results/{task_id}.jpg",
+                "result_url": f"/api/results/{task_id}.jpg",
                 **meta_data
             }
         else:
