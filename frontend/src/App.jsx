@@ -31,22 +31,31 @@ function App() {
     formData.append('style', style);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/generate`, formData);
-      // response.data shape (from ml-service/app/main.py):
-      // {
-      //   generated_image: string,          ← base64 JPEG
-      //   detected_objects: string[],       ← ["sofa", "chair", ...]
-      //   style_predictions: [{style, confidence}],
-      //   metadata: { prompt, style }
-      // }
-      setResult(response.data);
+      const response = await axios.post(`${API_BASE_URL}/generate`, formData, {
+        responseType: 'blob'
+      });
+
+      const imageUrl = URL.createObjectURL(response.data);
+      const metadataStr = response.headers['x-image-metadata'];
+      const parsedMeta = metadataStr ? JSON.parse(metadataStr) : {};
+
+      setResult({
+        ...parsedMeta,
+        generated_image: imageUrl
+      });
     } catch (err) {
       console.error(err);
-      setError(
-        err.response?.data?.detail ||
-        err.response?.data?.error ||
-        'Something went wrong while generating the result.'
-      );
+      let errorMessage = 'Something went wrong while generating the result.';
+      if (err.response?.data instanceof Blob) {
+        const text = await err.response.data.text();
+        try {
+          const errJson = JSON.parse(text);
+          errorMessage = errJson.detail || errJson.error || errorMessage;
+        } catch (e) {}
+      } else {
+        errorMessage = err.response?.data?.detail || err.response?.data?.error || errorMessage;
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -159,7 +168,7 @@ function App() {
                       itemOne={<ReactCompareSliderImage src={preview} alt="Original room" />}
                       itemTwo={
                         <ReactCompareSliderImage
-                          src={`data:image/jpeg;base64,${result.generated_image}`}
+                          src={result.generated_image}
                           alt="AI redesigned room"
                         />
                       }

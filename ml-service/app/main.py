@@ -1,6 +1,9 @@
 import io
 import base64
+import json
+import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import Response
 from PIL import Image
 
 from .services.detector import ObjectDetector
@@ -9,6 +12,7 @@ from .services.prompter import PromptEngine
 from .services.classifier import StyleClassifier
 
 app = FastAPI(title="Decoraid ML Service")
+gpu_lock = asyncio.Lock()
 
 # ---------------------------------------------------------------------------
 # Initialize all models once at startup — NOT per-request.
@@ -28,7 +32,7 @@ async def health():
 
 
 @app.post("/generate")
-def generate_design(
+async def generate_design(
     image: UploadFile = File(...),
     style: str = Form(...)
 ):
@@ -43,7 +47,7 @@ def generate_design(
     """
     try:
         # --- Step 1: Decode image ---
-        image_bytes = image.file.read()
+        image_bytes = await image.read()
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         # --- Step 2: Object Detection ---
@@ -58,16 +62,17 @@ def generate_design(
         # --- Step 4: Prompt Construction ---
         prompt = prompter.build_prompt(detected_objects, active_style)
 
-        # --- Step 5: Generate redesigned image ---
-        generated_image = generator.generate(pil_image, prompt, active_style)
+        # --- Step 5: Generate redesigned image locked via GPU lock ---
+        async with gpu_lock:
+            generated_image = await asyncio.to_thread(
+                generator.generate, pil_image, prompt, active_style
+            )
 
-        # --- Step 6: Encode and return ---
+        # --- Step 6: Encode into raw binary response ---
         img_byte_arr = io.BytesIO()
         generated_image.save(img_byte_arr, format="JPEG", quality=90)
-        img_b64 = base64.b64encode(img_byte_arr.getvalue()).decode("utf-8")
 
-        return {
-            "generated_image": img_b64,
+        metadata = {
             "detected_objects": detected_objects,       # list[str]
             "style_predictions": style_predictions,     # list[{style, confidence}]
             "metadata": {
@@ -75,6 +80,12 @@ def generate_design(
                 "style": active_style,
             },
         }
+
+        return Response(
+            content=img_byte_arr.getvalue(),
+            media_type="image/jpeg",
+            headers={"X-Image-Metadata": json.dumps(metadata)}
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ML Pipeline Error: {str(e)}")
