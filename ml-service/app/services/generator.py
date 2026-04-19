@@ -86,7 +86,10 @@ class ImageGenerator:
         This is the structural conditioning signal sent to ControlNet.
         """
         image_np = np.array(image)
-        edges = cv2.Canny(image_np, 100, 200)
+        v = np.median(image_np)
+        lower = int(max(0, (1.0 - 0.33) * v))
+        upper = int(min(255, (1.0 + 0.33) * v))
+        edges = cv2.Canny(image_np, lower, upper)
         # ControlNet expects a 3-channel image
         edges_3ch = np.stack([edges, edges, edges], axis=2)
         return Image.fromarray(edges_3ch)

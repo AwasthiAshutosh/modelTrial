@@ -10,6 +10,7 @@ services:
   ml-worker:
     build: ./ml-service
     platform: linux/amd64
+    restart: always
     command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
     environment:
       - CUDA_VISIBLE_DEVICES=0
@@ -34,6 +35,7 @@ services:
   ml-service:
     build: ./ml-service
     platform: linux/amd64
+    restart: always
     ports:
       - "8000:8000"
     environment:
