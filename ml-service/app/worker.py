@@ -20,6 +20,11 @@ celery_app = Celery(
     backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 )
 
+# Clear large base64 image results out of Redis automatically after 1 hour
+celery_app.conf.update(
+    result_expires=3600
+)
+
 # Global instances
 ml_components = {}
 
