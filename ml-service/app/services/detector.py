@@ -40,7 +40,7 @@ class ObjectDetector:
             A deduplicated list of object label strings, e.g. ["couch", "chair", "tv"].
             Returns an empty list if nothing is detected.
         """
-        results = self.model(image, verbose=False)
+        results = self.model(image, device="cpu", verbose=False)
         detected = set()
 
         for result in results:

@@ -9,7 +9,14 @@ const PORT = process.env.PORT || 5000;
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:8000';
 
 app.use(cors());
-app.use(express.json());
+// MOVED: Only apply json parsing to routes that ARE NOT the proxy
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+        next();
+    } else {
+        express.json()(req, res, next);
+    }
+});
 app.use(morgan('dev'));
 
 // Health check
