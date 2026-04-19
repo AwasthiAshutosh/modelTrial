@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Loader2, ArrowRight, Home, Palette, BrainCircuit, Wand2 } from 'lucide-react';
@@ -19,6 +19,15 @@ function App() {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const eventSourceRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
 
   const handleGenerate = async () => {
     if (!file) return;
@@ -35,8 +44,13 @@ function App() {
     try {
       const response = await axios.post(`${API_BASE_URL}/generate`, formData);
       const taskId = response.data.task_id;
+      
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
 
       const eventSource = new EventSource(`${API_BASE_URL}/status/${taskId}`);
+      eventSourceRef.current = eventSource;
 
       eventSource.onmessage = (event) => {
         try {

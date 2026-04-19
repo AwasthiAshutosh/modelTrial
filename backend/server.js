@@ -28,7 +28,17 @@ app.use('/api', createProxyMiddleware({
         '^/api': '', // Strip /api prefix when forwarding
     },
     proxyTimeout: 300000, // 5 minute timeout 
-    timeout: 300000
+    timeout: 300000,
+    // CRITICAL: Flush SSE responses immediately instead of buffering.
+    // Without this, EventSource streams from FastAPI are held by the proxy
+    // and the frontend hangs forever on "Designing your room..."
+    onProxyRes: (proxyRes, req, res) => {
+        if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
+            proxyRes.headers['cache-control'] = 'no-cache';
+            proxyRes.headers['connection'] = 'keep-alive';
+            proxyRes.headers['x-accel-buffering'] = 'no';
+        }
+    },
 }));
 
 app.listen(PORT, () => {

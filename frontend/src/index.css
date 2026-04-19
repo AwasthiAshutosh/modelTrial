@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@theme {
+  --color-premium-dark: #0f172a;
+  --color-premium-accent: #3b82f6;
+  --color-premium-gold: #fbbf24;
+  --color-premium-gray: #94a3b8;
+}
+
 /* -----------------------------------------------------------------------
    Design Tokens — used via Tailwind arbitrary values or custom classes.
    e.g. bg-[--color-premium-accent], text-[--color-premium-dark]

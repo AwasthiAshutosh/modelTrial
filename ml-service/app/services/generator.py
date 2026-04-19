@@ -117,8 +117,11 @@ class ImageGenerator:
                 print(f"[ImageGenerator] Dynamically loaded LoRA adapter: {style}")
             self.pipe.set_adapters([style])
         else:
-            self.pipe.disable_lora()
-            print(f"[ImageGenerator] No LoRA found for {style}, disabling adapters.")
+            # Only disable LoRA if adapters were previously loaded.
+            # Calling disable_lora() with zero adapters throws ValueError.
+            if self.active_loras:
+                self.pipe.set_adapters([])
+            print(f"[ImageGenerator] No LoRA found for {style}, running base model.")
 
         output = self.pipe(
             prompt=prompt,

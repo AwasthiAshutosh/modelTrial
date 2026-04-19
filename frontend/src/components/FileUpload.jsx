@@ -1,13 +1,22 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const FileUpload = ({ file, setFile, preview, setPreview }) => {
   const fileInputRef = useRef(null);
 
+  useEffect(() => {
+    return () => {
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
+
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      if (preview) URL.revokeObjectURL(preview);
       setFile(selectedFile);
       setPreview(URL.createObjectURL(selectedFile));
     }
@@ -15,6 +24,7 @@ const FileUpload = ({ file, setFile, preview, setPreview }) => {
 
   const clearFile = (e) => {
     e.stopPropagation();
+    if (preview) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview(null);
   };

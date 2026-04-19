@@ -50,10 +50,6 @@ class StyleClassifier:
                 {"style": "mid-century-modern", "confidence": 0.11}
             ]
         """
-        if not os.path.exists(_MODEL_PATH):
-            print("[StyleClassifier] Custom model missing. Returning default style.")
-            return [{"style": "modern", "confidence": 1.0}]
-
         results = self.model(image, device="cpu")
         probs = results[0].probs
         names = results[0].names

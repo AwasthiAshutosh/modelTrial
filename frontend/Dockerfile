@@ -35,6 +35,21 @@ server {\n\
         add_header Cache-Control "public, immutable";\n\
     }\n\
 \n\
+    # Reverse proxy API calls to backend Express gateway\n\
+    location /api/ {\n\
+        proxy_pass http://backend:5000;\n\
+        proxy_http_version 1.1;\n\
+        proxy_set_header Upgrade $http_upgrade;\n\
+        proxy_set_header Connection "upgrade";\n\
+        proxy_set_header Host $host;\n\
+        proxy_set_header X-Real-IP $remote_addr;\n\
+        proxy_read_timeout 300s;\n\
+        proxy_send_timeout 300s;\n\
+        # Disable buffering for SSE event streams\n\
+        proxy_buffering off;\n\
+        proxy_cache off;\n\
+    }\n\
+\n\
     # SPA fallback — route everything to index.html\n\
     location / {\n\
         try_files $uri $uri/ /index.html;\n\

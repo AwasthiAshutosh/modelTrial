@@ -1,6 +1,7 @@
 import io
 import json
 import uuid
+import time
 import base64
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -61,8 +62,21 @@ async def generate_design(
 
 @app.get("/status/{task_id}")
 async def get_status(task_id: str):
+    # Maximum time (seconds) to keep the SSE connection alive.
+    # Prevents infinite coroutine leaks if a Celery task is lost
+    # (worker crash, Redis restart, OOM kill).
+    MAX_WAIT_SECONDS = 600  # 10 minutes
+
     async def event_generator():
+        start = time.time()
         while True:
+            # Guard: break out if we've been polling too long
+            elapsed = time.time() - start
+            if elapsed > MAX_WAIT_SECONDS:
+                data = {"status": "failed", "error": "Task timed out after 10 minutes. The worker may have crashed."}
+                yield f"data: {json.dumps(data)}\n\n"
+                break
+
             res = AsyncResult(task_id, app=celery_app)
             if res.ready():
                 if res.successful():

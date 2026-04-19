@@ -16,8 +16,8 @@ from .services.generator import ImageGenerator
 
 celery_app = Celery(
     "decoraid_ml_worker", 
-    broker="redis://redis:6379/0", 
-    backend="redis://redis:6379/0"
+    broker=os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0"), 
+    backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 )
 
 # Global instances
@@ -32,7 +32,17 @@ def init_worker(**kwargs):
     ml_components['generator'] = ImageGenerator()
 
 # Use bind=True to safely get self.request.id
-@celery_app.task(bind=True, name="generate_image_task")
+# autoretry_for: Retry on transient GPU errors (CUDA OOM, model loading failures).
+# max_retries=2: Prevents infinite retry loops on truly broken inputs.
+# retry_backoff=True: Exponential backoff (1s, 2s, 4s) to let GPU memory recover.
+@celery_app.task(
+    bind=True,
+    name="generate_image_task",
+    autoretry_for=(RuntimeError, torch.cuda.OutOfMemoryError) if torch.cuda.is_available() else (RuntimeError,),
+    max_retries=2,
+    retry_backoff=True,
+    retry_backoff_max=30,
+)
 def generate_image_task(self, input_image_b64: str, raw_selected_style: str):
     """
     Heavy GPU task linearly executing YOLO, Classifier, Prompter and Stable Diffusion.

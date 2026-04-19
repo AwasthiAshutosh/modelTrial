@@ -1,5 +1,13 @@
+import os
 from ultralytics import YOLO
 from PIL import Image
+
+# Resolve the absolute path to yolov8n.pt shipped alongside the Docker image.
+# Using a bare filename relies on CWD being /app — if Celery prefork changes CWD,
+# Ultralytics silently re-downloads the model from the internet on every restart.
+_DEFAULT_YOLO_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "..", "yolov8n.pt"
+)
 
 
 class ObjectDetector:
@@ -24,7 +32,7 @@ class ObjectDetector:
         "potted plant", "bottle", "cup", "bowl", "wine glass",
     }
 
-    def __init__(self, model_path: str = "yolov8n.pt"):
+    def __init__(self, model_path: str = _DEFAULT_YOLO_PATH):
         self.model = YOLO(model_path)
         print(f"[ObjectDetector] Loaded '{model_path}' on COCO weights.")
 
