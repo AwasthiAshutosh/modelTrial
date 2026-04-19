@@ -2,6 +2,34 @@ version: '3.8'
 
 services:
 
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  ml-worker:
+    build: ./ml-service
+    platform: linux/amd64
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - ./ml-service/app/models:/app/app/models
+      - task_results:/app/results
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
   # ── ML Service (FastAPI + YOLOv8 + Stable Diffusion) ─────────────────────
   ml-service:
     build: ./ml-service
@@ -16,6 +44,11 @@ services:
       - hf_cache:/root/.cache/huggingface
       # Mount the models directory so you can drop in best.pt without rebuilding.
       - ./ml-service/app/models:/app/app/models
+      # Mount shared volumes for image storage
+      - task_results:/app/results
+    depends_on:
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -55,3 +88,4 @@ services:
 volumes:
   # Named volume — persists HuggingFace downloads between docker-compose up/down
   hf_cache:
+  task_results:

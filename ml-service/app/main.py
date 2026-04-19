@@ -1,18 +1,21 @@
 import io
-import base64
+import os
 import json
+import uuid
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
+from celery.result import AsyncResult
 from PIL import Image
 
 from .services.detector import ObjectDetector
-from .services.generator import ImageGenerator
 from .services.prompter import PromptEngine
 from .services.classifier import StyleClassifier
+from .worker import generate_image_task, celery_app
 
 app = FastAPI(title="Decoraid ML Service")
-gpu_lock = asyncio.Lock()
+app.mount("/results", StaticFiles(directory="/app/results"), name="results")
 
 # ---------------------------------------------------------------------------
 # Initialize all models once at startup — NOT per-request.
@@ -20,9 +23,10 @@ gpu_lock = asyncio.Lock()
 # Subsequent runs use the local cache at ~/.cache/huggingface.
 # ---------------------------------------------------------------------------
 detector = ObjectDetector()
-generator = ImageGenerator()
 prompter = PromptEngine()
 classifier = StyleClassifier()
+
+os.makedirs("/app/results", exist_ok=True)
 
 
 @app.get("/health")
@@ -50,42 +54,60 @@ async def generate_design(
         image_bytes = await image.read()
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        # --- Step 2: Object Detection ---
-        detected_objects = detector.detect(pil_image)
+        # --- Step 2: Object Detection (Threaded) ---
+        detected_objects = await asyncio.to_thread(detector.detect, pil_image)
 
-        # --- Step 3: Style Classification ---
-        # If the frontend passes style="auto", we auto-detect from the image.
-        # Otherwise we use the user-selected style directly.
-        style_predictions = classifier.classify(pil_image)
+        # --- Step 3: Style Classification (Threaded) ---
+        style_predictions = await asyncio.to_thread(classifier.classify, pil_image)
         active_style = style_predictions[0]["style"] if style == "auto" else style
 
         # --- Step 4: Prompt Construction ---
         prompt = prompter.build_prompt(detected_objects, active_style)
 
-        # --- Step 5: Generate redesigned image locked via GPU lock ---
-        async with gpu_lock:
-            generated_image = await asyncio.to_thread(
-                generator.generate, pil_image, prompt, active_style
-            )
+        # --- Step 5: Save input and dispatch to Celery ---
+        task_id = str(uuid.uuid4())
+        input_path = f"/app/results/{task_id}_input.jpg"
+        pil_image.save(input_path, format="JPEG")
+        
+        # Save metadata synchronously for the status poll
+        meta_path = f"/app/results/{task_id}_meta.json"
+        with open(meta_path, "w") as f:
+            json.dump({
+                "detected_objects": detected_objects,
+                "style_predictions": style_predictions,
+                "metadata": {"prompt": prompt, "style": active_style}
+            }, f)
 
-        # --- Step 6: Encode into raw binary response ---
-        img_byte_arr = io.BytesIO()
-        generated_image.save(img_byte_arr, format="JPEG", quality=90)
-
-        metadata = {
-            "detected_objects": detected_objects,       # list[str]
-            "style_predictions": style_predictions,     # list[{style, confidence}]
-            "metadata": {
-                "prompt": prompt,
-                "style": active_style,
-            },
-        }
-
-        return Response(
-            content=img_byte_arr.getvalue(),
-            media_type="image/jpeg",
-            headers={"X-Image-Metadata": json.dumps(metadata)}
+        # Dispatch async task
+        task = generate_image_task.apply_async(
+            args=[input_path, prompt, active_style], 
+            task_id=task_id
         )
+
+        return {"status": "processing", "task_id": task.id}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ML Pipeline Error: {str(e)}")
+
+
+@app.get("/status/{task_id}")
+async def get_status(task_id: str):
+    res = AsyncResult(task_id, app=celery_app)
+    
+    if res.ready():
+        if res.successful():
+            meta_path = f"/app/results/{task_id}_meta.json"
+            meta_data = {}
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    meta_data = json.load(f)
+            
+            return {
+                "status": "completed",
+                "result_url": f"/api/results/{task_id}.jpg",
+                **meta_data
+            }
+        else:
+            return {"status": "failed", "error": str(res.result)}
+            
+    return {"status": "processing"}

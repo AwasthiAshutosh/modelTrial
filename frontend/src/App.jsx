@@ -31,32 +31,43 @@ function App() {
     formData.append('style', style);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/generate`, formData, {
-        responseType: 'blob'
-      });
+      const response = await axios.post(`${API_BASE_URL}/generate`, formData);
+      const taskId = response.data.task_id;
 
-      const imageUrl = URL.createObjectURL(response.data);
-      const metadataStr = response.headers['x-image-metadata'];
-      const parsedMeta = metadataStr ? JSON.parse(metadataStr) : {};
+      const pollStatus = async () => {
+        try {
+          const statusRes = await axios.get(`${API_BASE_URL}/status/${taskId}`);
+          const { status, error, result_url, ...meta } = statusRes.data;
 
-      setResult({
-        ...parsedMeta,
-        generated_image: imageUrl
-      });
+          if (status === 'completed') {
+            setResult({
+              ...meta,
+              generated_image: result_url
+            });
+            setLoading(false);
+          } else if (status === 'failed') {
+            setError(error || 'Generation task failed in ML service.');
+            setLoading(false);
+          } else {
+            // Still internal processing, poll again
+            setTimeout(pollStatus, 2500);
+          }
+        } catch (pollErr) {
+          console.error(pollErr);
+          setError('Lost connection to status monitor.');
+          setLoading(false);
+        }
+      };
+
+      pollStatus();
+
     } catch (err) {
       console.error(err);
-      let errorMessage = 'Something went wrong while generating the result.';
-      if (err.response?.data instanceof Blob) {
-        const text = await err.response.data.text();
-        try {
-          const errJson = JSON.parse(text);
-          errorMessage = errJson.detail || errJson.error || errorMessage;
-        } catch (e) {}
-      } else {
-        errorMessage = err.response?.data?.detail || err.response?.data?.error || errorMessage;
-      }
-      setError(errorMessage);
-    } finally {
+      setError(
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        'Something went wrong while communicating with the engine.'
+      );
       setLoading(false);
     }
   };

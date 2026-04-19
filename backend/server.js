@@ -13,22 +13,15 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Health check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'Gateway is running', ml_service: ML_SERVICE_URL });
-});
-
-// Main generation route: streamed proxy directly to ML Service
-app.post('/api/generate', createProxyMiddleware({
+// Universal API Gateway Proxy to ML Service
+app.use('/api', createProxyMiddleware({
     target: ML_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: {
-        '^/api/generate': '/generate', // rewrites /api/generate proxyReq to /generate
+        '^/api': '', // Strip /api prefix when forwarding
     },
     proxyTimeout: 300000, // 5 minute timeout 
-    timeout: 300000,
-    onProxyReq: (proxyReq, req, res) => {
-        // Direct stream, avoids hitting Express RAM limits
-    }
+    timeout: 300000
 }));
 
 app.listen(PORT, () => {
