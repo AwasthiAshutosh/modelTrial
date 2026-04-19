@@ -72,7 +72,9 @@ async def get_status(task_id: str):
         if res.successful():
             meta_path = f"/app/results/{task_id}_meta.json"
             meta_data = {}
-            if os.path.exists(meta_path):
+            # Offload OS operations
+            file_exists = await asyncio.to_thread(os.path.exists, meta_path)
+            if file_exists:
                 async with aiofiles.open(meta_path, mode="r") as f:
                     content = await f.read()
                     meta_data = json.loads(content)

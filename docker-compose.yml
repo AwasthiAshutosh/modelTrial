@@ -41,7 +41,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - CUDA_VISIBLE_DEVICES=0
+      - CUDA_VISIBLE_DEVICES=""
     volumes:
       # Persist HuggingFace model cache (~5GB) across container restarts.
       # Without this, models re-download every time you rebuild.
@@ -60,14 +60,7 @@ services:
       retries: 5
       # Give the service time to download and load models on first boot.
       start_period: 180s
-    # ── GPU support — remove the 'deploy' block if you don't have an NVIDIA GPU ──
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+
 
   # ── Backend Gateway (Express.js) ──────────────────────────────────────────
   backend:

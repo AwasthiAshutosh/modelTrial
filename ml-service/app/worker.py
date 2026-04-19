@@ -3,56 +3,81 @@ import io
 import json
 import torch
 from PIL import Image
-from celery import Celery
+from celery import Celery, Task
 
+# Import your services
 from .services.detector import ObjectDetector
 from .services.classifier import StyleClassifier
 from .services.prompter import PromptEngine
 from .services.generator import ImageGenerator
 
-# Initialize Celery explicitly pointing to our Redis container
 celery_app = Celery(
     "decoraid_ml_worker", 
     broker="redis://redis:6379/0", 
     backend="redis://redis:6379/0"
 )
 
-# Initialize all ML models linearly in the worker
-print("[Celery Worker] Booting Full ML Pipeline into VRAM...")
-detector = ObjectDetector()
-classifier = StyleClassifier()
-prompter = PromptEngine()
-generator = ImageGenerator()
+# Use a custom Task class to lazy-load models ONLY in the worker process
+class MLTask(Task):
+    _detector = None
+    _classifier = None
+    _prompter = None
+    _generator = None
 
-# Ensure shared volume directory exists
+    @property
+    def detector(self):
+        if self._detector is None:
+            print("[Celery Worker] Booting Detector...")
+            self._detector = ObjectDetector()
+        return self._detector
+
+    @property
+    def classifier(self):
+        if self._classifier is None:
+            print("[Celery Worker] Booting Classifier...")
+            self._classifier = StyleClassifier()
+        return self._classifier
+
+    @property
+    def prompter(self):
+        if self._prompter is None:
+            print("[Celery Worker] Booting Prompter...")
+            self._prompter = PromptEngine()
+        return self._prompter
+
+    @property
+    def generator(self):
+        if self._generator is None:
+            print("[Celery Worker] Booting Generator...")
+            self._generator = ImageGenerator()
+        return self._generator
+
 os.makedirs("/app/results", exist_ok=True)
 
-@celery_app.task(name="generate_image_task")
-def generate_image_task(input_image_path: str, raw_selected_style: str):
+# Use bind=True to safely get self.request.id
+@celery_app.task(bind=True, base=MLTask, name="generate_image_task")
+def generate_image_task(self, input_image_path: str, raw_selected_style: str):
     """
     Heavy GPU task linearly executing YOLO, Classifier, Prompter and Stable Diffusion.
+    Models are lazy-loaded on first task execution, not at import time.
     """
     try:
-        from celery import current_task
-        task_id = current_task.request.id
-
+        task_id = self.request.id  # Safe task ID retrieval
         pil_image = Image.open(input_image_path).convert("RGB")
         
-        # Linear memory optimization
-        detected_objects = detector.detect(pil_image)
-        style_predictions = classifier.classify(pil_image)
+        detected_objects = self.detector.detect(pil_image)
+        style_predictions = self.classifier.classify(pil_image)
         active_style = style_predictions[0]["style"] if raw_selected_style == "auto" else raw_selected_style
-        prompt = prompter.build_prompt(detected_objects, active_style)
+        prompt = self.prompter.build_prompt(detected_objects, active_style)
         
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        generated_image = generator.generate(pil_image, prompt, active_style)
+        generated_image = self.generator.generate(pil_image, prompt, active_style)
         
         output_path = f"/app/results/{task_id}.jpg"
         generated_image.save(output_path, format="JPEG", quality=90)
         
-        # Write metadata for the status polling
         meta_path = f"/app/results/{task_id}_meta.json"
         with open(meta_path, "w") as f:
             json.dump({
