@@ -30,6 +30,7 @@ class ImageGenerator:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.dtype = torch.float16 if self.device == "cuda" else torch.float32
+        self.active_loras = set()
 
         print(f"[ImageGenerator] Using device: {self.device} | dtype: {self.dtype}")
 
@@ -58,13 +59,7 @@ class ImageGenerator:
                 self.pipe.scheduler = UniPCMultistepScheduler.from_config(
                     self.pipe.scheduler.config
                 )
-                self.pipe.enable_model_cpu_offload()
-
-                try:
-                    self.pipe.enable_xformers_memory_efficient_attention()
-                    print("[ImageGenerator] xformers memory-efficient attention enabled.")
-                except Exception:
-                    print("[ImageGenerator] xformers not available — using default attention.")
+                self.pipe.enable_vae_slicing()
                 
                 # LoRA preloading removed to save VRAM by dynamically loading adapters in generate()
             except Exception as e:
@@ -116,9 +111,11 @@ class ImageGenerator:
         # Dynamically load the style LoRA to save VRAM
         lora_path = os.path.join(os.path.dirname(__file__), "..", "models", "lora", style)
         if os.path.exists(lora_path):
-            self.pipe.load_lora_weights(lora_path, adapter_name=style)
+            if style not in self.active_loras:
+                self.pipe.load_lora_weights(lora_path, adapter_name=style)
+                self.active_loras.add(style)
+                print(f"[ImageGenerator] Dynamically loaded LoRA adapter: {style}")
             self.pipe.set_adapters([style])
-            print(f"[ImageGenerator] Dynamically loaded LoRA adapter: {style}")
         else:
             self.pipe.disable_lora()
             print(f"[ImageGenerator] No LoRA found for {style}, disabling adapters.")
@@ -130,11 +127,5 @@ class ImageGenerator:
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
         ).images[0]
-
-        # Unload immediately after generation to free VRAM
-        if os.path.exists(lora_path):
-            self.pipe.delete_adapters(style)
-            self.pipe.unload_lora_weights()
-            print(f"[ImageGenerator] Unloaded LoRA adapter: {style} to free VRAM")
 
         return output

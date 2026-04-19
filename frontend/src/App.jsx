@@ -36,10 +36,12 @@ function App() {
       const response = await axios.post(`${API_BASE_URL}/generate`, formData);
       const taskId = response.data.task_id;
 
-      const pollStatus = async () => {
+      const eventSource = new EventSource(`${API_BASE_URL}/status/${taskId}`);
+
+      eventSource.onmessage = (event) => {
         try {
-          const statusRes = await axios.get(`${API_BASE_URL}/status/${taskId}`);
-          const { status, error, result_url, ...meta } = statusRes.data;
+          const data = JSON.parse(event.data);
+          const { status, error, result_url, ...meta } = data;
 
           if (status === 'completed') {
             setResult({
@@ -47,22 +49,25 @@ function App() {
               generated_image: result_url
             });
             setLoading(false);
+            eventSource.close();
           } else if (status === 'failed') {
             setError(error || 'Generation task failed in ML service.');
             setLoading(false);
+            eventSource.close();
           } else {
-            // Still internal processing, poll again
             setLoadingMessage('You are in the queue... Designing your room...');
-            setTimeout(pollStatus, 2500);
           }
-        } catch (pollErr) {
-          console.error(pollErr);
-          setError('Lost connection to status monitor.');
-          setLoading(false);
+        } catch (e) {
+          console.error('Error parsing SSE data:', e);
         }
       };
 
-      pollStatus();
+      eventSource.onerror = (err) => {
+        console.error('SSE Error:', err);
+        setError('Lost connection to status monitor.');
+        setLoading(false);
+        eventSource.close();
+      };
 
     } catch (err) {
       console.error(err);

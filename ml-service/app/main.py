@@ -1,24 +1,19 @@
 import io
-import os
 import json
 import uuid
+import base64
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import Response
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response, StreamingResponse
 from celery.result import AsyncResult
 from PIL import Image
-
-import aiofiles
 
 from .worker import generate_image_task, celery_app
 
 app = FastAPI(title="Decoraid ML Service")
-app.mount("/results", StaticFiles(directory="/app/results"), name="results")
 
 # ML Pipeline moved to worker.py to save VRAM and execution limits
 
-os.makedirs("/app/results", exist_ok=True)
 
 
 @app.get("/health")
@@ -42,19 +37,19 @@ async def generate_design(
     6. Return base64-encoded image + metadata as JSON.
     """
     try:
-        # --- Step 1: Decode image and save payload asynchronously ---
+        # --- Step 1: Decode and compress image to base64 payload ---
         task_id = str(uuid.uuid4())
-        input_path = f"/app/results/{task_id}_input.jpg"
 
         image_bytes = await image.read()
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         
-        # Offload file I/O to thread
-        await asyncio.to_thread(pil_image.save, input_path, format="JPEG")
+        buf = io.BytesIO()
+        pil_image.save(buf, format="JPEG", quality=85)
+        input_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
 
         # --- Step 2: Dispatch async task entirely out of FastAPI ---
         task = generate_image_task.apply_async(
-            args=[input_path, style], 
+            args=[input_b64, style], 
             task_id=task_id
         )
 
@@ -66,25 +61,28 @@ async def generate_design(
 
 @app.get("/status/{task_id}")
 async def get_status(task_id: str):
-    res = AsyncResult(task_id, app=celery_app)
-    
-    if res.ready():
-        if res.successful():
-            meta_path = f"/app/results/{task_id}_meta.json"
-            meta_data = {}
-            # Offload OS operations
-            file_exists = await asyncio.to_thread(os.path.exists, meta_path)
-            if file_exists:
-                async with aiofiles.open(meta_path, mode="r") as f:
-                    content = await f.read()
-                    meta_data = json.loads(content)
-            
-            return {
-                "status": "completed",
-                "result_url": f"/api/results/{task_id}.jpg",
-                **meta_data
-            }
-        else:
-            return {"status": "failed", "error": str(res.result)}
-            
-    return {"status": "processing"}
+    async def event_generator():
+        while True:
+            res = AsyncResult(task_id, app=celery_app)
+            if res.ready():
+                if res.successful():
+                    result_data = res.result
+                    data = {
+                        "status": "completed",
+                        "result_url": f"data:image/jpeg;base64,{result_data.get('result_b64', '')}",
+                        "detected_objects": result_data.get("detected_objects", []),
+                        "style_predictions": result_data.get("style_predictions", []),
+                        "metadata": result_data.get("metadata", {})
+                    }
+                    yield f"data: {json.dumps(data)}\n\n"
+                    break
+                else:
+                    data = {"status": "failed", "error": str(res.result)}
+                    yield f"data: {json.dumps(data)}\n\n"
+                    break
+            else:
+                data = {"status": "processing"}
+                yield f"data: {json.dumps(data)}\n\n"
+                await asyncio.sleep(0.5)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
