@@ -43,7 +43,7 @@ app.post('/api/generate', upload.single('image'), async (req, res) => {
             },
             maxContentLength: Infinity,
             maxBodyLength: Infinity,
-            timeout: 60000 // 60-second timeout for ML processing
+            timeout: 300000 // 5-minute timeout for ML processing
         });
 
         res.json(response.data);

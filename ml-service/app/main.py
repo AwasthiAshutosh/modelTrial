@@ -28,7 +28,7 @@ async def health():
 
 
 @app.post("/generate")
-async def generate_design(
+def generate_design(
     image: UploadFile = File(...),
     style: str = Form(...)
 ):
@@ -43,7 +43,7 @@ async def generate_design(
     """
     try:
         # --- Step 1: Decode image ---
-        image_bytes = await image.read()
+        image_bytes = image.file.read()
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         # --- Step 2: Object Detection ---
@@ -59,7 +59,7 @@ async def generate_design(
         prompt = prompter.build_prompt(detected_objects, active_style)
 
         # --- Step 5: Generate redesigned image ---
-        generated_image = generator.generate(pil_image, prompt)
+        generated_image = generator.generate(pil_image, prompt, active_style)
 
         # --- Step 6: Encode and return ---
         img_byte_arr = io.BytesIO()

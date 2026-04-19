@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 import cv2
 from PIL import Image
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel, UniPCMultistepScheduler
@@ -86,6 +87,7 @@ class ImageGenerator:
         self,
         image: Image.Image,
         prompt: str,
+        style: str,
         num_inference_steps: int = 25,
         guidance_scale: float = 7.5,
     ) -> Image.Image:
@@ -130,6 +132,18 @@ class ImageGenerator:
                 elif "boho" in prompt.lower() or "wood" in prompt.lower():
                      mock_img[mock_img > 100] = 150
                 return Image.fromarray(mock_img)
+
+        # Dynamically load LoRA weights based on the active style
+        lora_path = os.path.join(os.path.dirname(__file__), "..", "models", "lora", style)
+        
+        # Unload previous LoRAs to prevent styles from mixing
+        self.pipe.unload_lora_weights() 
+        
+        if os.path.exists(lora_path):
+            print(f"[ImageGenerator] Loading LoRA for style: {style}")
+            self.pipe.load_lora_weights(lora_path)
+        else:
+            print(f"[ImageGenerator] No LoRA found for {style}, using base prompt.")
 
         output = self.pipe(
             prompt=prompt,
