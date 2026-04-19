@@ -2,14 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* -----------------------------------------------------------------------
+   Design Tokens — used via Tailwind arbitrary values or custom classes.
+   e.g. bg-[--color-premium-accent], text-[--color-premium-dark]
+   ----------------------------------------------------------------------- */
 :root {
+  /* Brand colours */
+  --color-premium-accent: #3b82f6;   /* blue-500 */
+  --color-premium-dark:   #0f172a;   /* slate-900 */
+
+  /* Typography */
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
+  /* Browser dark-mode hint */
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a;
+  background-color: var(--color-premium-dark);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -29,6 +39,11 @@ body {
   width: 100%;
 }
 
+/* -----------------------------------------------------------------------
+   Utility classes used throughout the app
+   ----------------------------------------------------------------------- */
+
+/* Glassmorphism card style */
 .glass {
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(12px);
@@ -36,12 +51,24 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.125);
 }
 
+/* Solid accent gradient for buttons */
 .premium-gradient {
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
 }
 
+/* Gradient text effect for headings */
 .premium-text-gradient {
-  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+  background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 50%, #3b82f6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
+
+/* Accent colour helper classes — matches var(--color-premium-accent) */
+.bg-premium-accent    { background-color: var(--color-premium-accent); }
+.text-premium-accent  { color: var(--color-premium-accent); }
+.border-premium-accent { border-color: var(--color-premium-accent); }
+
+/* Dark background helper — matches var(--color-premium-dark) */
+.bg-premium-dark      { background-color: var(--color-premium-dark); }
+.text-premium-dark    { color: var(--color-premium-dark); }

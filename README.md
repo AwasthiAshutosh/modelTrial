@@ -1,62 +1,106 @@
-# Decoraid AI - Interior Design Platform
+# Decoraid AI — Interior Design Platform
 
-Decoraid is an end-to-end AI platform that reimagines interior spaces. Using YOLOv8 for object detection and Stable Diffusion with ControlNet for redesign, it transforms room photos into professionally designed spaces while preserving the original layout.
+An end-to-end AI platform that reimagines interior spaces. Upload a room photo,
+pick a style, and watch your room transform — powered by YOLOv8 and Stable
+Diffusion with ControlNet.
 
-## 🚀 Getting Started
+## Architecture
 
-### Prerequisites
+```
+Browser (React + Vite)
+  └─► Backend Gateway (Express.js :5000)
+        └─► ML Service (FastAPI :8000)
+              ├─ ObjectDetector    — YOLOv8n (COCO, furniture detection)
+              ├─ StyleClassifier   — YOLOv8s-cls (trained on 19 interior styles)
+              ├─ PromptEngine      — Builds Stable Diffusion conditioning text
+              └─ ImageGenerator   — SD v1.5 + ControlNet Canny (layout-preserving)
+```
 
--   Docker and Docker Compose
--   NVIDIA GPU with CUDA (recommended for ML Service)
+## Supported Styles
 
-### Running with Docker
+| Style | Description |
+|---|---|
+| **Auto-Detect** | Classifier picks from the uploaded image |
+| **Modern** | Sleek, high-contrast, neutral palette |
+| **Scandinavian** | Light woods, white walls, minimalist |
+| **Boho** | Eclectic, plants, warm earthy tones |
+| **Industrial** | Exposed brick, metal, dark leather |
+| **Mid-Century Modern** | Retro organic shapes, warm wood |
+| **Contemporary** | Clean geometry, open floor plan |
+| **Traditional** | Rich wood, symmetrical, formal |
+| **Mediterranean** | Terracotta, arched doorways, tiles |
 
-1.  Clone the repository.
-2.  Run the platform:
-    ```bash
-    docker-compose up --build
-    ```
-3.  Access the platform:
-    -   Frontend: `http://localhost`
-    -   Backend API: `http://localhost:5000`
-    -   ML Service: `http://localhost:8000`
+## Quick Start
 
-### Local Development Setup
+### Option 1 — Docker (Recommended)
 
-#### ML Service (FastAPI)
+> Requires Docker Desktop + (optionally) NVIDIA GPU with CUDA.
+> Remove the `deploy:` block in `docker-compose.yml` for CPU-only machines.
+
+```bash
+docker-compose up --build
+```
+
+Access:
+- **Frontend:**   http://localhost
+- **Backend API:** http://localhost:5000
+- **ML Service:** http://localhost:8000/health
+
+> ⚠️ First boot downloads ~5 GB of model weights. Subsequent starts use the cached `hf_cache` Docker volume.
+
+### Option 2 — Local Development
+
+**Terminal 1 — ML Service (FastAPI)**
 ```bash
 cd ml-service
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-#### Backend (Express)
+**Terminal 2 — Backend (Express)**
 ```bash
 cd backend
 npm install
 npm run dev
 ```
 
-#### Frontend (React)
+**Terminal 3 — Frontend (Vite)**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Open: http://localhost:5173
 
-## 🏗 Architecture
+## Integrating the Trained Style Classifier
 
--   **Frontend**: React + Vite + Tailwind CSS + Framer Motion.
--   **Backend**: Express.js Gateway for orchestration.
--   **ML Service**: FastAPI + YOLOv8 + Diffusers (SD 1.5 & ControlNet).
+The notebook `notebook/notebookc937c820ab.ipynb` trains a YOLOv8s style classifier on Kaggle.
+To use it in production:
 
-## 🎨 Supported Styles
+1. Run the notebook on Kaggle (free T4 GPU, ~1.5 hrs).
+2. Download `runs/classify/train2/weights/best.pt` from the Output tab.
+3. Save it to `ml-service/app/models/style_classifier.pt`.
+4. Restart the ML service — it auto-loads from that path.
 
--   **Scandinavian**: Minimalistic, light woods, functional.
--   **Modern**: Sleek, high contrast, sophisticated.
--   **Boho**: Eclectic, vibrant, many plants.
--   **Industrial**: Raw materials, exposed brick, dark leather.
+See `ml-service/app/models/README.md` for detailed instructions.
 
-## 📓 Google Colab
+## Training LoRA Adapters (Optional)
 
-A complete pipeline for running in the cloud is available in `notebook/InteriorDesignAI.ipynb`.
+To fine-tune custom style weights for Stable Diffusion:
+
+```bash
+# Download the HuggingFace training script
+wget https://raw.githubusercontent.com/huggingface/diffusers/main/examples/dreambooth/train_dreambooth_lora.py
+
+# Prepare data (creates folder structure)
+python ml/training/prepare_data.py
+
+# Add 20-30 images per style to data/generation/<style>/
+# Then train each style
+python ml/training/train_generation.py --style scandinavian --steps 500
+```
+
+Load the trained LoRA in `generator.py`:
+```python
+self.pipe.load_lora_weights("models/lora/scandinavian")
+```

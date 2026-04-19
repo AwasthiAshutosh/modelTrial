@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:8000';
 
 app.use(cors());
 app.use(express.json());
@@ -30,7 +30,7 @@ app.post('/api/generate', upload.single('image'), async (req, res) => {
         
         // Prepare data for ML service
         const formData = new FormData();
-        formData.append('file', req.file.buffer, {
+        formData.append('image', req.file.buffer, {
             filename: req.file.originalname,
             contentType: req.file.mimetype
         });
@@ -42,7 +42,8 @@ app.post('/api/generate', upload.single('image'), async (req, res) => {
                 ...formData.getHeaders()
             },
             maxContentLength: Infinity,
-            maxBodyLength: Infinity
+            maxBodyLength: Infinity,
+            timeout: 60000 // 60-second timeout for ML processing
         });
 
         res.json(response.data);

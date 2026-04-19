@@ -1,0 +1,74 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.so
+.venv/
+venv/
+ENV/
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Node.js ──────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tgz
+.npm
+
+# ── Environment / Secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── ML Model Weights (large binary files — use Git LFS or external storage) ──
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.h5
+*.pkl
+*.joblib
+
+# ── HuggingFace / YOLO caches ────────────────────────────────────────────────
+.cache/
+runs/
+wandb/
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+frontend/dist/
+frontend/build/
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS junk ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Data (100s of MB) ────────────────────────────────────────────────────────
+data/
+ml/data/
+*.zip
+*.tar.gz

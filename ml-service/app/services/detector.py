@@ -1,56 +1,54 @@
-import cv2
-import numpy as np
 from ultralytics import YOLO
-import torch
+from PIL import Image
 
-class RoomDetector:
-    def __init__(self, model_path='yolov8n.pt', custom_weights=None):
-        # Load the YOLOv8 model (Nano for speed, can be upgraded to 'm' or 'l')
-        path = custom_weights if custom_weights else model_path
-        self.model = YOLO(path)
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        
-    def detect(self, image_path):
-        results = self.model.predict(image_path, device=self.device)
-        detections = []
-        
-        # YOLOv8 returns a list of Results objects
+
+class ObjectDetector:
+    """
+    Detects furniture and room objects in a PIL Image using YOLOv8n.
+
+    Uses the standard COCO-pretrained YOLOv8 nano model — no custom training
+    needed here because COCO already covers the furniture classes relevant to
+    interior design (sofa, chair, dining table, bed, lamp, tv, book, etc.).
+
+    For higher accuracy on interior-specific objects, replace 'yolov8n.pt'
+    with a fine-tuned weight trained on a dataset like ADE20K or COCO-Stuff,
+    using the scripts in ml/training/train_detection.py.
+    """
+
+    # Subset of COCO class names that are relevant to interior design.
+    # Detections outside this set are filtered out to keep prompts clean.
+    INTERIOR_CLASSES = {
+        "chair", "couch", "bed", "dining table", "toilet", "tv",
+        "laptop", "microwave", "oven", "refrigerator", "sink",
+        "book", "clock", "vase", "scissors", "teddy bear",
+        "potted plant", "bottle", "cup", "bowl", "wine glass",
+    }
+
+    def __init__(self, model_path: str = "yolov8n.pt"):
+        self.model = YOLO(model_path)
+        print(f"[ObjectDetector] Loaded '{model_path}' on COCO weights.")
+
+    def detect(self, image: Image.Image) -> list[str]:
+        """
+        Runs YOLOv8 inference on a PIL Image and returns unique interior-relevant
+        class labels found in the scene.
+
+        Args:
+            image: A PIL Image (RGB).
+
+        Returns:
+            A deduplicated list of object label strings, e.g. ["couch", "chair", "tv"].
+            Returns an empty list if nothing is detected.
+        """
+        results = self.model(image, verbose=False)
+        detected = set()
+
         for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                detections.append({
-                    "label": self.model.names[int(box.cls)],
-                    "confidence": float(box.conf),
-                    "bbox": [float(x) for x in box.xyxy[0].tolist()],  # [x1, y1, x2, y2]
-                })
-        
-        return detections
+            for box in result.boxes:
+                class_id = int(box.cls[0])
+                class_name = self.model.names[class_id]
+                # Only include labels relevant to interior spaces
+                if class_name in self.INTERIOR_CLASSES:
+                    detected.add(class_name)
 
-    def get_structured_scene(self, detections, img_width, img_height):
-        objects_summary = {}
-        spatial_representation = []
-        
-        for det in detections:
-            label = det['label']
-            objects_summary[label] = objects_summary.get(label, 0) + 1
-            
-            # Simple spatial logic
-            bbox = det['bbox']
-            center_x = (bbox[0] + bbox[2]) / 2
-            
-            if center_x < img_width / 3:
-                pos = "left"
-            elif center_x > 2 * img_width / 3:
-                pos = "right"
-            else:
-                pos = "center"
-                
-            spatial_representation.append({
-                "object": label,
-                "position": pos
-            })
-            
-        return {
-            "objects": [{"label": k, "count": v} for k, v in objects_summary.items()],
-            "spatial": spatial_representation
-        }
+        return sorted(detected)   # sorted for deterministic prompt ordering

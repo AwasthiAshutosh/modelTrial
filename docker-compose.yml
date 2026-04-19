@@ -1,9 +1,29 @@
 version: '3.8'
 
 services:
+
+  # ── ML Service (FastAPI + YOLOv8 + Stable Diffusion) ─────────────────────
   ml-service:
     build: ./ml-service
     platform: linux/amd64
+    ports:
+      - "8000:8000"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      # Persist HuggingFace model cache (~5GB) across container restarts.
+      # Without this, models re-download every time you rebuild.
+      - hf_cache:/root/.cache/huggingface
+      # Mount the models directory so you can drop in best.pt without rebuilding.
+      - ./ml-service/app/models:/app/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      # Give the service time to download and load models on first boot.
+      start_period: 180s
+    # ── GPU support — remove the 'deploy' block if you don't have an NVIDIA GPU ──
     deploy:
       resources:
         reservations:
@@ -11,29 +31,27 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    environment:
-      - CUDA_VISIBLE_DEVICES=0
-    ports:
-      - "8000:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
+  # ── Backend Gateway (Express.js) ──────────────────────────────────────────
   backend:
     build: ./backend
     ports:
       - "5000:5000"
     environment:
+      - PORT=5000
       - ML_SERVICE_URL=http://ml-service:8000
     depends_on:
       ml-service:
         condition: service_healthy
 
+  # ── Frontend (React, served by Nginx) ────────────────────────────────────
   frontend:
     build: ./frontend
     ports:
       - "80:80"
     depends_on:
       - backend
+
+volumes:
+  # Named volume — persists HuggingFace downloads between docker-compose up/down
+  hf_cache:
