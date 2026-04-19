@@ -4,7 +4,7 @@ import uuid
 import time
 import base64
 import asyncio
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from celery.result import AsyncResult
 from PIL import Image
@@ -61,7 +61,7 @@ async def generate_design(
 
 
 @app.get("/status/{task_id}")
-async def get_status(task_id: str):
+async def get_status(task_id: str, request: Request):
     # Maximum time (seconds) to keep the SSE connection alive.
     # Prevents infinite coroutine leaks if a Celery task is lost
     # (worker crash, Redis restart, OOM kill).
@@ -70,6 +70,10 @@ async def get_status(task_id: str):
     async def event_generator():
         start = time.time()
         while True:
+            # Check if the user closed the browser or refreshed the page
+            if await request.is_disconnected():
+                break
+
             # Guard: break out if we've been polling too long
             elapsed = time.time() - start
             if elapsed > MAX_WAIT_SECONDS:

@@ -29,6 +29,11 @@ app.use('/api', createProxyMiddleware({
     },
     proxyTimeout: 300000, // 5 minute timeout 
     timeout: 300000,
+    // Safely handle proxy failures (e.g. ML service offline) without crashing Express
+    onError: (err, req, res) => {
+        console.error('[Proxy Error]', err.message);
+        res.status(502).json({ error: 'ML Service is currently unavailable. Please try again later.' });
+    },
     // CRITICAL: Flush SSE responses immediately instead of buffering.
     // Without this, EventSource streams from FastAPI are held by the proxy
     // and the frontend hangs forever on "Designing your room..."

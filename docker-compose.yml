@@ -42,6 +42,8 @@ services:
       - "8000:8000"
     environment:
       - CUDA_VISIBLE_DEVICES=""
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       # Persist HuggingFace model cache (~5GB) across container restarts.
       # Without this, models re-download every time you rebuild.
