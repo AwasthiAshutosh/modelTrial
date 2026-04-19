@@ -58,7 +58,7 @@ class ImageGenerator:
                 self.pipe.scheduler = UniPCMultistepScheduler.from_config(
                     self.pipe.scheduler.config
                 )
-                self.pipe.to(self.device)
+                self.pipe.enable_model_cpu_offload()
 
                 try:
                     self.pipe.enable_xformers_memory_efficient_attention()
@@ -66,14 +66,7 @@ class ImageGenerator:
                 except Exception:
                     print("[ImageGenerator] xformers not available — using default attention.")
                 
-                # --- Preload all LoRAs ---
-                lora_dir = os.path.join(os.path.dirname(__file__), "..", "models", "lora")
-                if os.path.exists(lora_dir):
-                    styles = [d for d in os.listdir(lora_dir) if os.path.isdir(os.path.join(lora_dir, d))]
-                    for s in styles:
-                        lora_path = os.path.join(lora_dir, s)
-                        print(f"[ImageGenerator] Pre-loading LoRA adapter: {s}")
-                        self.pipe.load_lora_weights(lora_path, adapter_name=s)
+                # LoRA preloading removed to save VRAM by dynamically loading adapters in generate()
             except Exception as e:
                 print(f"[ImageGenerator] Memory error during initialization: {str(e)}")
                 print("[ImageGenerator] Falling back to Mock Generation mode due to insufficient RAM.")
@@ -117,22 +110,18 @@ class ImageGenerator:
         canny_condition = self._extract_canny_edges(image)
 
         if self.pipe is None:
-            # We are in Mock Mode. Throw proper HTTP 503 error, but we'll return edge map gracefully.
-            print("[ImageGenerator] Warning: Pipe is None, falling back to Canny edge map.")
-            mock_img = np.array(canny_condition)
-            if "modern" in prompt.lower() or "contemporary" in prompt.lower():
-                 mock_img[mock_img > 100] = 200
-            elif "boho" in prompt.lower() or "wood" in prompt.lower():
-                 mock_img[mock_img > 100] = 150
-            return Image.fromarray(mock_img)
+            # Do not return mock_img. Raise an exception so Celery marks the task as failed.
+            raise RuntimeError("GPU Generation failed or is unavailable. Please try again later.")
 
-        # Hot-swap LoRA adapters via set_adapters instantly
-        try:
+        # Dynamically load the style LoRA to save VRAM
+        lora_path = os.path.join(os.path.dirname(__file__), "..", "models", "lora", style)
+        if os.path.exists(lora_path):
+            self.pipe.load_lora_weights(lora_path, adapter_name=style)
             self.pipe.set_adapters([style])
-            print(f"[ImageGenerator] Switched to LoRA adapter: {style}")
-        except Exception as e:
-            print(f"[ImageGenerator] No preloaded LoRA found for {style}, disabling adapters. Error: {e}")
+            print(f"[ImageGenerator] Dynamically loaded LoRA adapter: {style}")
+        else:
             self.pipe.disable_lora()
+            print(f"[ImageGenerator] No LoRA found for {style}, disabling adapters.")
 
         output = self.pipe(
             prompt=prompt,
@@ -141,5 +130,11 @@ class ImageGenerator:
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
         ).images[0]
+
+        # Unload immediately after generation to free VRAM
+        if os.path.exists(lora_path):
+            self.pipe.delete_adapters(style)
+            self.pipe.unload_lora_weights()
+            print(f"[ImageGenerator] Unloaded LoRA adapter: {style} to free VRAM")
 
         return output
