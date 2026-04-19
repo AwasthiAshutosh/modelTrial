@@ -47,8 +47,8 @@ def generate_image_task(self, input_image_path: str, raw_selected_style: str):
         active_style = style_predictions[0]["style"] if raw_selected_style == "auto" else raw_selected_style
         prompt = ml_components['prompter'].build_prompt(detected_objects, active_style)
         
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        # if torch.cuda.is_available():
+        #     torch.cuda.empty_cache()
             
         generated_image = ml_components['generator'].generate(pil_image, prompt, active_style)
         

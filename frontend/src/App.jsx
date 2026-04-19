@@ -16,6 +16,7 @@ function App() {
   const [preview, setPreview] = useState(null);
   const [style, setStyle] = useState('modern');
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
@@ -23,6 +24,7 @@ function App() {
     if (!file) return;
 
     setLoading(true);
+    setLoadingMessage('Connecting to Engine...');
     setError(null);
     setResult(null);
 
@@ -50,6 +52,7 @@ function App() {
             setLoading(false);
           } else {
             // Still internal processing, poll again
+            setLoadingMessage('You are in the queue... Designing your room...');
             setTimeout(pollStatus, 2500);
           }
         } catch (pollErr) {
@@ -140,7 +143,7 @@ function App() {
               {loading ? (
                 <>
                   <Loader2 className="animate-spin" />
-                  Generating Magic...
+                  {loadingMessage}
                 </>
               ) : (
                 <>
