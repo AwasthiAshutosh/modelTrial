@@ -4,30 +4,39 @@ const morgan = require('morgan');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
 
+const { initDb } = require('./src/db/init');
+const authRoutes = require('./src/routes/auth.routes');
+const designRoutes = require('./src/routes/design.routes');
+
+// Initialize Database
+initDb();
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:8000';
 
 app.use(cors());
-// MOVED: Only apply json parsing to routes that ARE NOT the proxy
-app.use((req, res, next) => {
-    if (req.path.startsWith('/api')) {
-        next();
-    } else {
-        express.json()(req, res, next);
-    }
-});
 app.use(morgan('dev'));
 
-// Health check
-// Universal API Gateway Proxy to ML Service
+// ── Local Auth Routes (handled by Express, NOT proxied) ──
+// These must be registered BEFORE the catch-all /api proxy.
+app.use('/api/auth', express.json(), authRoutes);
+app.use('/api/designs', express.json(), designRoutes);
+
+// ── Health Check ──
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+// ── Universal API Gateway Proxy to ML Service ──
+// Everything under /api that ISN'T /api/auth is forwarded to the ML service.
 app.use('/api', createProxyMiddleware({
     target: ML_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: {
         '^/api': '', // Strip /api prefix when forwarding
     },
-    proxyTimeout: 300000, // 5 minute timeout 
+    proxyTimeout: 300000, // 5 minute timeout
     timeout: 300000,
     // Safely handle proxy failures (e.g. ML service offline) without crashing Express
     onError: (err, req, res) => {

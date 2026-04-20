@@ -1,81 +1,45 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@theme {
-  --color-premium-dark: #0f172a;
-  --color-premium-accent: #3b82f6;
-  --color-premium-gold: #fbbf24;
-  --color-premium-gray: #94a3b8;
-}
-
-/* -----------------------------------------------------------------------
-   Design Tokens — used via Tailwind arbitrary values or custom classes.
-   e.g. bg-[--color-premium-accent], text-[--color-premium-dark]
-   ----------------------------------------------------------------------- */
 :root {
-  /* Brand colours */
-  --color-premium-accent: #3b82f6;   /* blue-500 */
-  --color-premium-dark:   #0f172a;   /* slate-900 */
-
-  /* Typography */
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  /* Browser dark-mode hint */
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: var(--color-premium-dark);
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --primary: #2a2a2a;
+  --accent: #d4af37; /* Gold/Boho accent */
+  --bg-light: #f9f9f9;
+  --text-dark: #1a1a1a;
 }
 
 body {
-  margin: 0;
-  display: flex;
-  min-width: 320px;
-  min-height: 100vh;
-  background: radial-gradient(circle at top, #1e293b 0%, #0f172a 100%);
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
 }
 
-#root {
-  width: 100%;
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
 }
 
-/* -----------------------------------------------------------------------
-   Utility classes used throughout the app
-   ----------------------------------------------------------------------- */
-
-/* Glassmorphism card style */
-.glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.125);
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
-/* Solid accent gradient for buttons */
-.premium-gradient {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Gradient text effect for headings */
-.premium-text-gradient {
-  background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 50%, #3b82f6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
 }
-
-/* Accent colour helper classes — matches var(--color-premium-accent) */
-.bg-premium-accent    { background-color: var(--color-premium-accent); }
-.text-premium-accent  { color: var(--color-premium-accent); }
-.border-premium-accent { border-color: var(--color-premium-accent); }
-
-/* Dark background helper — matches var(--color-premium-dark) */
-.bg-premium-dark      { background-color: var(--color-premium-dark); }
-.text-premium-dark    { color: var(--color-premium-dark); }

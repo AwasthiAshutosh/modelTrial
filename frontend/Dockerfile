@@ -25,6 +25,7 @@ RUN printf '\
 server {\n\
     listen 80;\n\
     server_name localhost;\n\
+    client_max_body_size 50M;\n\
 \n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\

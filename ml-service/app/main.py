@@ -17,6 +17,11 @@ app = FastAPI(title="Decoraid ML Service")
 
 
 
+@app.get("/")
+async def root():
+    """Root endpoint to prevent 404 errors on base URL."""
+    return {"message": "Welcome to Decoraid ML Service. Visit /docs for the API documentation."}
+
 @app.get("/health")
 async def health():
     """Health check endpoint used by Docker Compose and load balancers."""
