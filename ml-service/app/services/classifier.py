@@ -1,6 +1,7 @@
 import os
 from ultralytics import YOLO
 from PIL import Image
+import torch
 
 # Path to the trained classifier weights downloaded from Kaggle notebook.
 # After running the notebook, download best.pt and place it here:
@@ -50,7 +51,8 @@ class StyleClassifier:
                 {"style": "mid-century-modern", "confidence": 0.11}
             ]
         """
-        results = self.model(image, device="cpu")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        results = self.model(image, device=device)
         probs = results[0].probs
         names = results[0].names
 

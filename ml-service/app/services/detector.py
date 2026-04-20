@@ -1,6 +1,7 @@
 import os
 from ultralytics import YOLO
 from PIL import Image
+import torch
 
 # Resolve the absolute path to yolov8n.pt shipped alongside the Docker image.
 # Using a bare filename relies on CWD being /app — if Celery prefork changes CWD,
@@ -48,7 +49,8 @@ class ObjectDetector:
             A deduplicated list of object label strings, e.g. ["couch", "chair", "tv"].
             Returns an empty list if nothing is detected.
         """
-        results = self.model(image, device="cpu", verbose=False)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        results = self.model(image, device=device, verbose=False)
         detected = set()
 
         for result in results:

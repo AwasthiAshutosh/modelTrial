@@ -24,13 +24,13 @@ services:
       - hf_cache:/root/.cache/huggingface
       - ./ml-service/app/models:/app/app/models
       - task_results:/app/results
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: 1
+#              capabilities: [gpu]
 
   # ── ML Service (FastAPI + YOLOv8 + Stable Diffusion) ─────────────────────
   ml-service:

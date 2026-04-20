@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 import os
+import torch
 
 def train_detection(config_path='data/detection/data.yaml', epochs=50, imgsz=640):
     """
@@ -15,7 +16,7 @@ def train_detection(config_path='data/detection/data.yaml', epochs=50, imgsz=640
         data=config_path, 
         epochs=epochs, 
         imgsz=imgsz,
-        device=0, # Assuming GPU
+        device=0 if torch.cuda.is_available() else 'cpu', # Dynamic GPU/CPU
         project='runs/detect',
         name='interior_redesign'
     )
