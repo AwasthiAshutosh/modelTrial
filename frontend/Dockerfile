@@ -3,9 +3,14 @@
 FROM node:20-slim AS build
 WORKDIR /app
 
-# Install dependencies first (better layer caching — only re-runs on package changes)
+# Install dependencies first (better layer caching)
 COPY package*.json ./
-RUN npm install
+
+# Increase NPM stability for slower networks
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm install --no-audit --no-fund
 
 # Copy source and build the production bundle
 COPY . .

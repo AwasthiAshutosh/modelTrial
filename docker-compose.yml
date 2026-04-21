@@ -72,6 +72,9 @@ services:
     environment:
       - PORT=5000
       - ML_SERVICE_URL=http://ml-service:8000
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     depends_on:
       ml-service:
         condition: service_healthy
