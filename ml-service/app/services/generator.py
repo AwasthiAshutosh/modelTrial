@@ -35,10 +35,31 @@ class ImageGenerator:
         print(f"[ImageGenerator] Using device: {self.device} | dtype: {self.dtype}")
 
         if self.device == "cpu":
-            print("[ImageGenerator] Detected CPU Mode. Skipping massive Stable Diffusion load to prevent MemoryError (OOM).")
-            print("[ImageGenerator] Entering Mock Generation mode.")
-            self.controlnet = None
-            self.pipe = None
+            print("[ImageGenerator] Running in CPU Fallback mode. Generation will be SLOW (~2-5 minutes).")
+            try:
+                # Load ControlNet
+                self.controlnet = ControlNetModel.from_pretrained(
+                    self.CONTROLNET_ID,
+                    torch_dtype=self.dtype,
+                )
+                # Load Pipeline
+                self.pipe = StableDiffusionControlNetPipeline.from_pretrained(
+                    self.DIFFUSION_ID,
+                    controlnet=self.controlnet,
+                    torch_dtype=self.dtype,
+                    safety_checker=None,
+                )
+                # Optimization for CPU
+                self.pipe.scheduler = UniPCMultistepScheduler.from_config(self.pipe.scheduler.config)
+                
+                # Crucial CPU optimizations to prevent OOM
+                self.pipe.enable_attention_slicing()
+                
+                print("[ImageGenerator] CPU Pipeline loaded successfully.")
+            except Exception as e:
+                print(f"[ImageGenerator] CPU loading failed: {str(e)}")
+                self.controlnet = None
+                self.pipe = None
         else:
             try:
                 # Load ControlNet conditioner
@@ -52,7 +73,7 @@ class ImageGenerator:
                     self.DIFFUSION_ID,
                     controlnet=self.controlnet,
                     torch_dtype=self.dtype,
-                    safety_checker=None,   # Disabled — no NSFW risk in interior design
+                    safety_checker=None,
                 )
 
                 # UniPC is faster than DDIM/PNDM with similar quality
@@ -60,11 +81,11 @@ class ImageGenerator:
                     self.pipe.scheduler.config
                 )
                 self.pipe.enable_vae_slicing()
+                # Use model-level CPU offload for faster GPU inference if available
+                # but for pure CPU mode we use the block above.
                 
-                # LoRA preloading removed to save VRAM by dynamically loading adapters in generate()
             except Exception as e:
                 print(f"[ImageGenerator] Memory error during initialization: {str(e)}")
-                print("[ImageGenerator] Falling back to Mock Generation mode due to insufficient RAM.")
                 self.controlnet = None
                 self.pipe = None
 

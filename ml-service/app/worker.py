@@ -69,7 +69,14 @@ def generate_image_task(self, input_image_b64: str, raw_selected_style: str):
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
             
-        generated_image = ml_components['generator'].generate(pil_image, prompt, active_style)
+        # Use fewer steps on CPU to keep wait time reasonable
+        steps = 15 if not torch.cuda.is_available() else 25
+        generated_image = ml_components['generator'].generate(
+            pil_image, 
+            prompt, 
+            active_style, 
+            num_inference_steps=steps
+        )
         
         gc.collect()
         if torch.cuda.is_available():
