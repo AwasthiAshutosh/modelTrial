@@ -10,7 +10,14 @@ const Dashboard = () => {
     const [selectedDesign, setSelectedDesign] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
-    const user = JSON.parse(localStorage.getItem('user'));
+    const user = React.useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'));
+        } catch (e) {
+            console.error('Failed to parse user from localStorage:', e);
+            return null;
+        }
+    }, []);
 
     useEffect(() => {
         if (!user) {
@@ -18,7 +25,9 @@ const Dashboard = () => {
             return;
         }
         
-        axios.get(`/api/designs/history/${user.id}`)
+        axios.get(`/api/designs/history/${user.id}`, {
+            headers: { Authorization: `Bearer ${user.token}` }
+        })
             .then(res => {
                 setHistory(res.data);
                 setLoading(false);
@@ -26,6 +35,10 @@ const Dashboard = () => {
             .catch(err => {
                 console.error('Failed to fetch history:', err);
                 setLoading(false);
+                if (err.response && err.response.status === 401) {
+                    localStorage.removeItem('user');
+                    navigate('/auth');
+                }
             });
     }, [navigate]);
 

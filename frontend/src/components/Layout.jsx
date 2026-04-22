@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layout as LayoutIcon, LogOut, User, Trash2, ChevronDown, X } from 'lucide-react';
@@ -13,7 +13,14 @@ const Layout = ({ children }) => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deletePassword, setDeletePassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
-    const user = JSON.parse(localStorage.getItem('user'));
+    const user = useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'));
+        } catch (e) {
+            console.error('Failed to parse user from localStorage:', e);
+            return null;
+        }
+    }, [location.pathname]);
 
     const handleLogout = () => {
         localStorage.removeItem('user');
@@ -22,7 +29,9 @@ const Layout = ({ children }) => {
 
     const handleDeleteAccount = async () => {
         try {
-            await axios.post(`${API_BASE_URL}/auth/delete`, { userId: user.id, password: deletePassword });
+            await axios.post(`${API_BASE_URL}/auth/delete`, { password: deletePassword }, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
             localStorage.removeItem('user');
             setShowDeleteModal(false);
             navigate('/');

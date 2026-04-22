@@ -20,9 +20,9 @@ celery_app = Celery(
     backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 )
 
-# Clear large base64 image results out of Redis automatically after 1 hour
+# Clear large base64 image results out of Redis automatically.
 celery_app.conf.update(
-    result_expires=3600
+    result_expires=int(os.environ.get("CELERY_RESULT_EXPIRES", 3600))
 )
 
 # Global instances
@@ -56,6 +56,14 @@ def generate_image_task(self, input_image_b64: str, raw_selected_style: str):
     try:
         task_id = self.request.id  # Safe task ID retrieval
         
+        # Lazy load components if not already loaded
+        if 'detector' not in ml_components:
+            print("[Celery Worker] Booting models dynamically during task execution...")
+            ml_components['detector'] = ObjectDetector()
+            ml_components['classifier'] = StyleClassifier()
+            ml_components['prompter'] = PromptEngine()
+            ml_components['generator'] = ImageGenerator()
+            
         image_bytes = base64.b64decode(input_image_b64)
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         
@@ -97,4 +105,4 @@ def generate_image_task(self, input_image_b64: str, raw_selected_style: str):
         }
     except Exception as e:
         print(f"[Celery Worker] Task failed: {str(e)}")
-        raise e
+        raise

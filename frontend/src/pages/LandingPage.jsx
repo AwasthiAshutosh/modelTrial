@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Wand2, DollarSign, Image as ImageIcon } from 'lucide-react';
+import { ArrowRight, Wand2, Image as ImageIcon } from 'lucide-react';
 
 const LandingPage = () => {
     return (
@@ -30,7 +30,7 @@ const LandingPage = () => {
                         transition={{ delay: 0.4 }}
                         className="text-xl md:text-2xl text-stone-300 mb-10"
                     >
-                        Upload a photo, choose a theme, and get a complete renovation plan with cost estimates in seconds.
+                        Upload a photo, choose a theme, and see your room redesigned by AI in seconds.
                     </motion.p>
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
@@ -47,7 +47,7 @@ const LandingPage = () => {
             {/* Features Section */}
             <section className="py-24 bg-white">
                 <div className="max-w-7xl mx-auto px-4">
-                    <div className="grid md:grid-cols-3 gap-12">
+                    <div className="grid md:grid-cols-2 gap-12">
                         <FeatureCard
                             icon={<ImageIcon className="w-10 h-10 text-amber-600" />}
                             title="Upload & Analyze"
@@ -57,11 +57,6 @@ const LandingPage = () => {
                             icon={<Wand2 className="w-10 h-10 text-amber-600" />}
                             title="AI Transformation"
                             description="Choose from themes like Boho, Scandinavian, or Industrial. Watch your room transform instantly."
-                        />
-                        <FeatureCard
-                            icon={<DollarSign className="w-10 h-10 text-amber-600" />}
-                            title="Cost Estimation"
-                            description="Get a detailed breakdown of estimated costs for furniture and renovation items."
                         />
                     </div>
                 </div>

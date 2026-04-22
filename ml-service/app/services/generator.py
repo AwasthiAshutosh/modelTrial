@@ -5,8 +5,6 @@ import cv2
 from PIL import Image
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel, UniPCMultistepScheduler
 
-from .prompter import PromptEngine
-
 
 class ImageGenerator:
     """
@@ -26,6 +24,10 @@ class ImageGenerator:
 
     CONTROLNET_ID = "lllyasviel/sd-controlnet-canny"
     DIFFUSION_ID = "runwayml/stable-diffusion-v1-5"
+    NEGATIVE_PROMPT = (
+        "blurry, low quality, distorted, messy, cluttered, dark, gloomy, "
+        "lowres, text, watermark, logo, grainy, deformed, ugly, bad anatomy"
+    )
 
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -41,6 +43,7 @@ class ImageGenerator:
                 self.controlnet = ControlNetModel.from_pretrained(
                     self.CONTROLNET_ID,
                     torch_dtype=self.dtype,
+                    low_cpu_mem_usage=True,
                 )
                 # Load Pipeline
                 self.pipe = StableDiffusionControlNetPipeline.from_pretrained(
@@ -48,12 +51,14 @@ class ImageGenerator:
                     controlnet=self.controlnet,
                     torch_dtype=self.dtype,
                     safety_checker=None,
+                    low_cpu_mem_usage=True,
                 )
                 # Optimization for CPU
                 self.pipe.scheduler = UniPCMultistepScheduler.from_config(self.pipe.scheduler.config)
                 
                 # Crucial CPU optimizations to prevent OOM
                 self.pipe.enable_attention_slicing()
+                self.pipe.enable_vae_slicing()
                 
                 print("[ImageGenerator] CPU Pipeline loaded successfully.")
             except Exception as e:
@@ -81,8 +86,7 @@ class ImageGenerator:
                     self.pipe.scheduler.config
                 )
                 self.pipe.enable_vae_slicing()
-                # Use model-level CPU offload for faster GPU inference if available
-                # but for pure CPU mode we use the block above.
+                self.pipe = self.pipe.to(self.device)
                 
             except Exception as e:
                 print(f"[ImageGenerator] Memory error during initialization: {str(e)}")
@@ -95,10 +99,11 @@ class ImageGenerator:
         This is the structural conditioning signal sent to ControlNet.
         """
         image_np = np.array(image)
-        v = np.median(image_np)
+        image_gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+        v = np.median(image_gray)
         lower = int(max(0, (1.0 - 0.33) * v))
         upper = int(min(255, (1.0 + 0.33) * v))
-        edges = cv2.Canny(image_np, lower, upper)
+        edges = cv2.Canny(image_gray, lower, upper)
         # ControlNet expects a 3-channel image
         edges_3ch = np.stack([edges, edges, edges], axis=2)
         return Image.fromarray(edges_3ch)
@@ -123,6 +128,10 @@ class ImageGenerator:
         Returns:
             Generated PIL Image.
         """
+        # On CPU, resize input to 256x256 to dramatically speed up inference
+        if self.device == "cpu":
+            image = image.resize((256, 256), Image.LANCZOS)
+
         canny_condition = self._extract_canny_edges(image)
 
         if self.pipe is None:
@@ -144,12 +153,21 @@ class ImageGenerator:
                 self.pipe.set_adapters([])
             print(f"[ImageGenerator] No LoRA found for {style}, running base model.")
 
-        output = self.pipe(
+        # Build generation kwargs
+        gen_kwargs = dict(
             prompt=prompt,
             image=canny_condition,
-            negative_prompt=PromptEngine.NEGATIVE_PROMPT,
+            negative_prompt=self.NEGATIVE_PROMPT,
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
-        ).images[0]
+        )
+
+        # On CPU, explicitly set a small output size to prevent SD from
+        # defaulting to 512x512 which is extremely slow.
+        if self.device == "cpu":
+            gen_kwargs["width"] = 256
+            gen_kwargs["height"] = 256
+
+        output = self.pipe(**gen_kwargs).images[0]
 
         return output

@@ -1,12 +1,13 @@
 const express = require('express');
 const { db } = require('../db/init');
+const { authenticate } = require('../middleware/auth');
 const router = express.Router();
 
 // Save a completed generation design to the database
-router.post('/save', (req, res) => {
-    const { userId, generatedImage, style, detectedObjects, stylePredictions, metadata } = req.body;
+router.post('/save', authenticate, (req, res) => {
+    const { generatedImage, style, detectedObjects, stylePredictions, metadata } = req.body;
 
-    if (!userId || !generatedImage || !style) {
+    if (!generatedImage || !style) {
         return res.status(400).json({ error: 'Missing required configuration' });
     }
 
@@ -18,7 +19,7 @@ router.post('/save', (req, res) => {
 
         // Use a dummy 'original_image' string for now, since ml-service handles the file directly
         const result = stmt.run(
-            userId,
+            req.user.id,
             'uploaded_to_ml_service',
             generatedImage,
             style,
@@ -35,10 +36,10 @@ router.post('/save', (req, res) => {
 });
 
 // Fetch design history for a specific user
-router.get('/history/:userId', (req, res) => {
+router.get('/history/:userId', authenticate, (req, res) => {
     try {
         const stmt = db.prepare('SELECT * FROM designs WHERE user_id = ? ORDER BY created_at DESC');
-        const rows = stmt.all(req.params.userId);
+        const rows = stmt.all(req.user.id);
         
         // Parse the JSON fields back to objects before returning
         const history = rows.map(row => ({

@@ -29,15 +29,16 @@ app.get('/health', (req, res) => {
 });
 
 // ── Universal API Gateway Proxy to ML Service ──
-// Everything under /api that ISN'T /api/auth is forwarded to the ML service.
+// Everything under /api/generate or /api/status is forwarded to the ML service.
 app.use('/api', createProxyMiddleware({
+    pathFilter: (path) => path.includes('generate') || path.includes('status'),
     target: ML_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: {
-        '^/api': '', // Strip /api prefix when forwarding
+        '^/api': '', // Strip /api prefix when forwarding: /api/generate -> /generate
     },
-    proxyTimeout: 300000, // 5 minute timeout
-    timeout: 300000,
+    proxyTimeout: 3600000, // 60 minute timeout to match ml-service
+    timeout: 3600000,
     // Safely handle proxy failures (e.g. ML service offline) without crashing Express
     onError: (err, req, res) => {
         console.error('[Proxy Error]', err.message);

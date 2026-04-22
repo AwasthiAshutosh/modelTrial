@@ -7,7 +7,7 @@ import torch
 # After running the notebook, download best.pt and place it here:
 #   ml-service/app/models/style_classifier.pt
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "style_classifier.pt")
-_FALLBACK_PATH = "yolov8s-cls.pt"  # Pre-trained fallback if custom model not present
+
 
 
 class StyleClassifier:
@@ -25,16 +25,14 @@ class StyleClassifier:
     """
 
     def __init__(self):
-        model_path = _MODEL_PATH if os.path.exists(_MODEL_PATH) else _FALLBACK_PATH
-        if model_path == _FALLBACK_PATH:
-            print(
-                "[StyleClassifier] WARNING: Custom weights not found at "
-                f"'{_MODEL_PATH}'. Falling back to '{_FALLBACK_PATH}'. "
+        if not os.path.exists(_MODEL_PATH):
+            raise FileNotFoundError(
+                f"[StyleClassifier] ERROR: Custom weights not found at '{_MODEL_PATH}'. "
                 "Download best.pt from the Kaggle notebook and place it at "
                 "ml-service/app/models/style_classifier.pt for accurate results."
             )
-        self.model = YOLO(model_path)
-        print(f"[StyleClassifier] Loaded from: {model_path}")
+        self.model = YOLO(_MODEL_PATH)
+        print(f"[StyleClassifier] Loaded from: {_MODEL_PATH}")
 
     def classify(self, image: Image.Image) -> list[dict]:
         """

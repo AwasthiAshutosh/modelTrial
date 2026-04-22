@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 def download_file(url, filename):
     response = requests.get(url, stream=True)
+    response.raise_for_status()
     total_size = int(response.headers.get('content-length', 0))
     block_size = 1024
     t = tqdm(total=total_size, unit='iB', unit_scale=True)

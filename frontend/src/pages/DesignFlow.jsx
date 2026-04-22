@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Upload, Palette, ArrowRight, Loader2 } from 'lucide-react';
 
 const API_BASE_URL = '/api';
+const MAX_FILE_SIZE = parseInt(import.meta.env.VITE_MAX_FILE_SIZE || '10485760', 10); // Default 10MB
 
 const themes = [
     { id: 'modern', name: 'Modern', image: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=400' },
@@ -22,12 +23,19 @@ const DesignFlow = () => {
     const [loadingMessage, setLoadingMessage] = useState('Designing Your Room...');
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
     const eventSourceRef = useRef(null);
     const navigate = useNavigate();
 
     // Auth guard
     useEffect(() => {
-        const user = JSON.parse(localStorage.getItem('user'));
+        let user = null;
+        try {
+            user = JSON.parse(localStorage.getItem('user'));
+        } catch (e) {
+            console.error('Failed to parse user from localStorage:', e);
+        }
+
         if (!user) {
             navigate('/auth');
         }
@@ -42,8 +50,28 @@ const DesignFlow = () => {
         };
     }, []);
 
+    // Manage preview URL to prevent memory leaks
+    useEffect(() => {
+        if (!file) {
+            setPreviewUrl(null);
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        setPreviewUrl(objectUrl);
+
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [file]);
+
     const handleFileChange = (e) => {
-        if (e.target.files[0]) setFile(e.target.files[0]);
+        const selectedFile = e.target.files[0];
+        if (selectedFile) {
+            if (selectedFile.size > MAX_FILE_SIZE) {
+                alert(`File is too large. Maximum size is ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB.`);
+                return;
+            }
+            setFile(selectedFile);
+        }
     };
 
     // ── ML Service generation logic (unchanged backend integration) ──
@@ -83,8 +111,14 @@ const DesignFlow = () => {
                         setResult(newResult);
                         
                         // Save to backend SQLite DB
-                        const user = JSON.parse(localStorage.getItem('user'));
-                        if (user) {
+                        let user = null;
+                        try {
+                            user = JSON.parse(localStorage.getItem('user'));
+                        } catch (e) {
+                            console.error('Failed to parse user for saving:', e);
+                        }
+
+                        if (user && user.token) {
                             axios.post(`${API_BASE_URL}/designs/save`, {
                                 userId: user.id,
                                 generatedImage: result_url,
@@ -92,6 +126,8 @@ const DesignFlow = () => {
                                 detectedObjects: meta.detected_objects,
                                 stylePredictions: meta.style_predictions,
                                 metadata: meta.metadata
+                            }, {
+                                headers: { Authorization: `Bearer ${user.token}` }
                             }).catch(err => console.error('Failed to save design to DB:', err));
                         }
 
@@ -112,11 +148,7 @@ const DesignFlow = () => {
             };
 
             eventSource.onerror = (err) => {
-                console.error('SSE Error:', err);
-                setError('Lost connection to status monitor.');
-                setLoading(false);
-                setStep(2);
-                eventSource.close();
+                console.warn('SSE connection interrupted, attempting to reconnect...', err);
             };
 
         } catch (err) {
@@ -249,7 +281,7 @@ const DesignFlow = () => {
                         <div className="grid md:grid-cols-2 gap-8">
                             <div className="bg-white p-4 rounded-2xl shadow-sm">
                                 <h3 className="font-bold mb-4">Original</h3>
-                                <img src={URL.createObjectURL(file)} alt="Original" className="w-full rounded-lg" />
+                                {previewUrl && <img src={previewUrl} alt="Original" className="w-full rounded-lg" />}
                             </div>
                             <div className="bg-white p-4 rounded-2xl shadow-sm ring-2 ring-amber-100 relative overflow-hidden">
                                 <h3 className="font-bold mb-4 text-amber-600">AI Redesign</h3>

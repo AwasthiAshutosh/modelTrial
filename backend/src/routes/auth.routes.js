@@ -1,15 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db/init');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { authenticate, JWT_SECRET } = require('../middleware/auth');
+const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '10', 10);
+
 
 // Signup
 router.post('/signup', (req, res) => {
     const { name, email, password } = req.body;
+    
+    if (!name || !email || !password) {
+        return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
     try {
-        // In production, hash the password with bcrypt
+        // Hash the password with bcrypt
+        const hashedPassword = bcrypt.hashSync(password, BCRYPT_ROUNDS);
         const stmt = db.prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
-        const info = stmt.run(name, email, password);
-        res.status(201).json({ id: info.lastInsertRowid, name, email });
+        const info = stmt.run(name, email, hashedPassword);
+        const token = jwt.sign({ userId: info.lastInsertRowid }, JWT_SECRET, { expiresIn: '7d' });
+        res.status(201).json({ id: info.lastInsertRowid, name, email, token });
     } catch (error) {
         console.error('Signup error:', error);
         if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -26,24 +38,26 @@ router.post('/login', (req, res) => {
         const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
         const user = stmt.get(email);
 
-        if (!user || user.password !== password) {
+        if (!user || !bcrypt.compareSync(password, user.password)) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        res.json({ id: user.id, name: user.name, email: user.email });
+        const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ id: user.id, name: user.name, email: user.email, token });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // Delete Account
-router.post('/delete', (req, res) => {
-    const { userId, password } = req.body;
+router.post('/delete', authenticate, (req, res) => {
+    const { password } = req.body;
+    const userId = req.user.id;
     try {
         const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
         const user = stmt.get(userId);
 
-        if (!user || user.password !== password) {
+        if (!user || !bcrypt.compareSync(password, user.password)) { 
             return res.status(401).json({ error: 'Invalid password' });
         }
 
